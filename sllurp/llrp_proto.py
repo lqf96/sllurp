@@ -1812,15 +1812,21 @@ def encode_AccessCommand(par):
 
     data = encode_C1G2TagSpec(par['TagSpecParameter'])
 
-    if 'WriteData' in par['OpSpecParameter']:
-        if par['OpSpecParameter']['WriteDataWordCount'] > 1:
-            data += encode_C1G2BlockWrite(par['OpSpecParameter'])
+    opspecs = par['OpSpecParameter']
+    # Wrap single OpSpec parameter in list
+    if isinstance(opspecs, dict):
+        opspecs = [opspecs]
+    # Encode each OpSpec
+    for opspec in opspecs:
+        if 'WriteData' in opspec:
+            if opspec['WriteDataWordCount'] > 1:
+                data += encode_C1G2BlockWrite(opspec)
+            else:
+                data += encode_C1G2Write(opspec)
+        elif 'LockPayload' in opspec:
+            data += encode_C1G2Lock(opspec)
         else:
-            data += encode_C1G2Write(par['OpSpecParameter'])
-    elif 'LockPayload' in par['OpSpecParameter']:
-        data += encode_C1G2Lock(par['OpSpecParameter'])
-    else:
-        data += encode_C1G2Read(par['OpSpecParameter'])
+            data += encode_C1G2Read(opspec)
 
     data = struct.pack(msg_header, msgtype,
                        len(data) + msg_header_len) + data
@@ -2636,9 +2642,21 @@ def decode_TagReportData(data):
         else:
             break
 
-    ret, body = decode_OpSpecResult(body)
-    if ret:
-        par['OpSpecResult'] = ret
+    # OpSpec results
+    opspec_results = []
+    while body:
+        ret, body = decode_OpSpecResult(body)
+        # New OpSpec result
+        if ret:
+            opspec_results.append(ret)
+        else:
+            break
+    # Append to tag report result
+    n_opspec_results = len(opspec_results)
+    if n_opspec_results>1:
+        par["OpSpecResult"] = opspec_results
+    elif n_opspec_results==1:
+        par["OpSpecResult"] = opspec_results[0]
 
     logger.debug('par=%s', par)
     return par, data[length:]
