@@ -10,7 +10,7 @@ from .llrp_proto import LLRPROSpec, LLRPError, Message_struct, \
     DEFAULT_MODULATION
 from .llrp_errors import ReaderConfigurationError
 from binascii import hexlify
-from .util import BITMASK, natural_keys
+from .util import BITMASK, natural_keys, run_async
 from twisted.internet import reactor, task, defer
 from twisted.internet.protocol import ClientFactory
 from twisted.protocols.basic import LineReceiver
@@ -764,7 +764,7 @@ class LLRPClient(LineReceiver):
             }}))
         self._deferreds['ADD_ACCESSSPEC_RESPONSE'].append(onCompletion)
 
-    def send_DISABLE_ACCESSSPEC(self, accessSpecID=1, onCompletion=None):
+    def send_DISABLE_ACCESSSPEC(self, accessSpecID, onCompletion=None):
         self.sendLLRPMessage(LLRPMessage(msgdict={
             'DISABLE_ACCESSSPEC': {
                 'Ver':  1,
@@ -776,7 +776,7 @@ class LLRPClient(LineReceiver):
         if onCompletion:
             self._deferreds['DISABLE_ACCESSSPEC_RESPONSE'].append(onCompletion)
 
-    def send_ENABLE_ACCESSSPEC(self, _, accessSpecID, onCompletion=None):
+    def send_ENABLE_ACCESSSPEC(self, accessSpecID, onCompletion=None):
         self.sendLLRPMessage(LLRPMessage(msgdict={
             'ENABLE_ACCESSSPEC': {
                 'Ver':  1,
@@ -788,10 +788,7 @@ class LLRPClient(LineReceiver):
         if onCompletion:
             self._deferreds['ENABLE_ACCESSSPEC_RESPONSE'].append(onCompletion)
 
-    def send_DELETE_ACCESSSPEC(self, placeHolderArg, readSpecParam,
-                               writeSpecParam, stopParam, accessSpecID=1,
-                               onCompletion=None):
-        # logger.info('Deleting current accessSpec.')
+    def send_DELETE_ACCESSSPEC(self, accessSpecID, onCompletion=None):
         self.sendLLRPMessage(LLRPMessage(msgdict={
             'DELETE_ACCESSSPEC': {
                 'Ver': 1,
@@ -799,13 +796,10 @@ class LLRPClient(LineReceiver):
                 'ID': 0,
                 'AccessSpecID': accessSpecID  # ONE AccessSpec
             }}))
-
-        # Hackfix to chain startAccess to send_DELETE, since appending a
-        # deferred doesn't seem to work...
-        task.deferLater(reactor, 0, self.startAccess, readWords=readSpecParam,
-                        writeWords=writeSpecParam, accessStopParam=stopParam,
-                        accessSpecID=accessSpecID)
-
+        # TODO: This may not work so test it later
+        if onCompletion:
+            self._deferreds['DELETE_ACCESSSPEC_RESPONSE'].append(onCompletion)
+    @defer.inlineCallbacks
     def startAccess(self, readWords=None, writeWords=None, target=None,
                     accessStopParam=None, accessSpecID=1, param=None,
                     *args):
@@ -884,22 +878,27 @@ class LLRPClient(LineReceiver):
             }
         }
 
-        d = defer.Deferred()
-        d.addCallback(self.send_ENABLE_ACCESSSPEC, accessSpecID)
-        d.addErrback(self.panic, 'ADD_ACCESSSPEC failed')
-
-        self.send_ADD_ACCESSSPEC(accessSpec, onCompletion=d)
-
-    def nextAccess(self, readSpecPar, writeSpecPar, stopSpecPar,
-                   accessSpecID=1):
-        d = defer.Deferred()
-        d.addCallback(self.send_DELETE_ACCESSSPEC, readSpecPar, writeSpecPar,
-                      stopSpecPar, accessSpecID)
-        d.addErrback(self.send_DELETE_ACCESSSPEC, readSpecPar, writeSpecPar,
-                     stopSpecPar, accessSpecID)
-        # d.addErrback(self.panic, 'DISABLE_ACCESSSPEC failed')
-
-        self.send_DISABLE_ACCESSSPEC(accessSpecID, onCompletion=d)
+        # Add AccessSpec
+        yield run_async(self.send_ADD_ACCESSSPEC, accessSpec)
+        # Enable AccessSpec
+        yield run_async(self.send_ENABLE_ACCESSSPEC, accessSpecID)
+    @defer.inlineCallbacks
+    def nextAccess(self, readSpecPar=None, writeSpecPar=None, stopSpecPar=None,
+                   accessSpecID=1, param=None, target=None):
+        # Disable AccessSpec
+        yield run_async(self.send_DISABLE_ACCESSSPEC, accessSpecID)
+        # Delete AccessSpec
+        yield run_async(self.send_DELETE_ACCESSSPEC, accessSpecID)
+        # Start new AccessSpec
+        yield run_async(
+            self.startAccess,
+            readWords=readSpecPar,
+            writeWords=writeSpecPar,
+            target=target,
+            accessStopParam=stopSpecPar,
+            accessSpecID=accessSpecID,
+            param=None
+        )
 
     def startInventory(self, *args):
         """Add a ROSpec to the reader and enable it."""

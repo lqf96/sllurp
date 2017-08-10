@@ -2,6 +2,7 @@ from __future__ import unicode_literals
 from inspect import stack
 import re
 
+from twisted.internet.defer import Deferred
 
 def BIT(n):
     return 1 << n
@@ -36,3 +37,18 @@ def natural_keys(text):
     ['foo3', 'foo25']
     """
     return [atoi(c) for c in re.split('(\d+)', text)]
+
+def run_async(func, *args, **kwargs):
+    """
+    Run callback-style function and return corresponding Deferred object.
+
+    :param func: Function to run
+    :param args: Arguments to be passed to the function
+    :param kwargs: Keyword arguments to be passed to the function
+    :returns: Deferred object
+    """
+    d = kwargs.setdefault("onCompletion", Deferred())
+    # Call function with deferred object
+    func(*args, **kwargs)
+    # Return deferred object
+    return d
