@@ -2,7 +2,8 @@ from __future__ import unicode_literals
 from inspect import stack
 import re
 
-from twisted.internet.defer import Deferred
+from twisted.internet import reactor
+from twisted.internet.defer import Deferred, logError
 
 def BIT(n):
     return 1 << n

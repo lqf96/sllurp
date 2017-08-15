@@ -351,7 +351,7 @@ class LLRPClient(LineReceiver):
             if isSuccess:
                 d.callback(self.state)
             else:
-                d.errback(self.state)
+                d.errback(Exception(self.state))
         del self._deferreds[msgName]
 
     def handleMessage(self, lmsg):
@@ -813,7 +813,7 @@ class LLRPClient(LineReceiver):
     @defer.inlineCallbacks
     def startAccess(self, readWords=None, writeWords=None, target=None,
                     accessStopParam=None, accessSpecID=1, param=None,
-                    *args):
+                    onCompletion=None, *args):
         m = Message_struct['AccessSpec']
         if not target:
             target = {
@@ -890,16 +890,28 @@ class LLRPClient(LineReceiver):
         }
 
         # Add AccessSpec
-        yield run_async(self.send_ADD_ACCESSSPEC, accessSpec)
+        try:
+            yield run_async(self.send_ADD_ACCESSSPEC, accessSpec)
+        except Exception as e:
+            self.panic(e.args[0], "ADD_ACCESSSPEC failed")
         # Enable AccessSpec
         yield run_async(self.send_ENABLE_ACCESSSPEC, accessSpecID)
+        # Completed
+        if onCompletion:
+            onCompletion.callback(self.state)
     @defer.inlineCallbacks
     def nextAccess(self, readSpecPar=None, writeSpecPar=None, stopSpecPar=None,
                    accessSpecID=1, param=None, target=None):
         # Disable AccessSpec
-        yield run_async(self.send_DISABLE_ACCESSSPEC, accessSpecID)
+        try:
+            yield run_async(self.send_DISABLE_ACCESSSPEC, accessSpecID)
+        except Exception:
+            pass
         # Delete AccessSpec
-        yield run_async(self.send_DELETE_ACCESSSPEC, accessSpecID)
+        try:
+            yield run_async(self.send_DELETE_ACCESSSPEC, accessSpecID)
+        except Exception:
+            pass
         # Start new AccessSpec
         yield run_async(
             self.startAccess,
@@ -908,7 +920,7 @@ class LLRPClient(LineReceiver):
             target=target,
             accessStopParam=stopSpecPar,
             accessSpecID=accessSpecID,
-            param=None
+            param=param
         )
 
     def startInventory(self, *args):

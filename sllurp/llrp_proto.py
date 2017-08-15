@@ -1817,6 +1817,7 @@ def encode_AccessCommand(par):
     if isinstance(opspecs, dict):
         opspecs = [opspecs]
     # Encode each OpSpec
+    print(len(data))
     for opspec in opspecs:
         if 'WriteData' in opspec:
             if opspec['WriteDataWordCount'] > 1:
@@ -1828,6 +1829,7 @@ def encode_AccessCommand(par):
         else:
             data += encode_C1G2Read(opspec)
 
+    print(len(data))
     data = struct.pack(msg_header, msgtype,
                        len(data) + msg_header_len) + data
 
@@ -1874,9 +1876,9 @@ Message_struct['C1G2TagSpec'] = {
 def encode_bitstring(bstr, length_bytes):
     def B(x):
         return struct.pack('!B', x)
-    Bs = map(B, struct.unpack('>' + 'B' * len(bstr), bstr))
-    Bs += ['\x00'] * (length_bytes - len(bstr))
-    return ''.join(Bs)
+    Bs = [B(x) for x in struct.unpack('>' + 'B' * len(bstr), bstr)]
+    Bs += [b'\x00'] * (length_bytes - len(bstr))
+    return b''.join(Bs)
 
 
 def encode_C1G2TargetTag(par):
@@ -1889,12 +1891,12 @@ def encode_C1G2TargetTag(par):
     data += struct.pack('!H', int(par['Pointer']))
     data += struct.pack('!H', int(par['MaskBitCount']))
     if int(par['MaskBitCount']):
-        numBytes = ((par['MaskBitCount'] - 1) / 8) + 1
+        numBytes = ((par['MaskBitCount'] - 1) // 8) + 1
         data += encode_bitstring(par['TagMask'], numBytes)
 
     data += struct.pack('!H', int(par['DataBitCount']))
     if int(par['DataBitCount']):
-        numBytes = ((par['DataBitCount'] - 1) / 8) + 1
+        numBytes = ((par['DataBitCount'] - 1) // 8) + 1
         data += encode_bitstring(par['TagData'], numBytes)
 
     data = struct.pack(msg_header, msgtype,
