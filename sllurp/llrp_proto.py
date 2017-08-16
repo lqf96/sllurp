@@ -1817,7 +1817,6 @@ def encode_AccessCommand(par):
     if isinstance(opspecs, dict):
         opspecs = [opspecs]
     # Encode each OpSpec
-    print(len(data))
     for opspec in opspecs:
         if 'WriteData' in opspec:
             if opspec['WriteDataWordCount'] > 1:
@@ -1829,7 +1828,6 @@ def encode_AccessCommand(par):
         else:
             data += encode_C1G2Read(opspec)
 
-    print(len(data))
     data = struct.pack(msg_header, msgtype,
                        len(data) + msg_header_len) + data
 
