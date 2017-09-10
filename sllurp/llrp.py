@@ -895,7 +895,10 @@ class LLRPClient(LineReceiver):
         except Exception as e:
             self.panic(e.args[0], "ADD_ACCESSSPEC failed")
         # Enable AccessSpec
-        yield run_async(self.send_ENABLE_ACCESSSPEC, accessSpecID)
+        try:
+            yield run_async(self.send_ENABLE_ACCESSSPEC, accessSpecID)
+        except Exception as e:
+            self.panic(e.args[0], "ENABLE_ACCESSSPEC failed")
         # Completed
         if onCompletion:
             onCompletion.callback(self.state)
